@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wong.collector.infrastructure.persistence.mapper.MaterialSearchMapper">
+
+  <sql id="ftsCondition">
+    <if test="tsQuery != null and tsQuery != ''">
+      and me.material_fts @@ plainto_tsquery('simple', #{tsQuery})
+    </if>
+    <if test="minConfidence != null">
+      and coalesce(me.confidence, 0) &gt;= #{minConfidence}
+    </if>
+  </sql>
+
+  <select id="countFtsResults" resultType="long">
+    select count(*)
+    from material_extraction me
+    join paper p on p.paper_id = me.paper_id and p.deleted = false
+    where 1 = 1
+    <include refid="ftsCondition"/>
+  </select>
+
+  <select id="searchFts" resultType="com.wong.collector.infrastructure.persistence.dto.MaterialSearchRow">
+    select
+      me.paper_id,
+      me.material,
+      me.property,
+      me.confidence,
+      me.method,
+      mm.formatted_value as value,
+      mm.unit,
+      <choose>
+        <when test="tsQuery != null and tsQuery != ''">
+          ts_rank(me.material_fts, plainto_tsquery('simple', #{tsQuery})) as score
+        </when>
+        <otherwise>
+          1.0 as score
+        </otherwise>
+      </choose>
+    from material_extraction me
+    join paper p on p.paper_id = me.paper_id and p.deleted = false
+    left join lateral (
+      select 
+        case 
+          when mm_inner.value_type = 'number' then 
+            cast(mm_inner.value_num as varchar) 
+          when mm_inner.value_type = 'range' then 
+            cast(mm_inner.value_min as varchar) || ' - ' || cast(mm_inner.value_max as varchar)
+          else 
+            mm_inner.value_text
+        end as formatted_value,
+        mm_inner.unit
+      from material_metric mm_inner
+      where mm_inner.paper_id = me.paper_id 
+        and lower(trim(mm_inner.material_key)) = lower(trim(replace(me.material, ' ', '_')))
+      order by mm_inner.confidence desc nulls last
+      limit 1
+    ) mm on true
+    where 1 = 1
+    <include refid="ftsCondition"/>
+    order by
+      <if test="tsQuery != null and tsQuery != ''">
+        score desc,
+      </if>
+      me.confidence desc nulls last, me.id desc
+    limit #{limit} offset #{offset}
+  </select>
+
+</mapper>

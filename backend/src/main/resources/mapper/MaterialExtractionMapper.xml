@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wong.collector.infrastructure.persistence.mapper.MaterialExtractionMapper">
+
+  <sql id="materialKeyExpr">
+    lower(trim(me.material))
+  </sql>
+
+  <sql id="baseJoin">
+    from material_extraction me
+    join paper p on p.paper_id = me.paper_id and p.deleted = false
+  </sql>
+
+  <sql id="summaryWhere">
+    <where>
+      1 = 1
+      <if test="q != null and q != ''">
+        and <include refid="materialKeyExpr"/> like concat('%', lower(trim(#{q})), '%')
+      </if>
+      <if test="minConfidence != null">
+        and coalesce(me.confidence, 0) &gt;= #{minConfidence}
+      </if>
+    </where>
+  </sql>
+
+  <select id="countDistinctMaterialKey" resultType="long">
+    select count(distinct <include refid="materialKeyExpr"/>)
+    <include refid="baseJoin"/>
+    <include refid="summaryWhere"/>
+  </select>
+
+  <select id="pageMaterialSummary" resultType="com.wong.collector.infrastructure.persistence.dto.MaterialSummaryRow">
+    select
+      <include refid="materialKeyExpr"/> as material_key,
+      min(me.material) as material,
+      count(distinct me.paper_id) as paper_count,
+      count(*) as occurrence_count,
+      max(me.confidence) as max_confidence
+    <include refid="baseJoin"/>
+    <include refid="summaryWhere"/>
+    group by <include refid="materialKeyExpr"/>
+    order by material_key asc
+    limit #{limit} offset #{offset}
+  </select>
+
+  <sql id="papersWhere">
+    <where>
+      1 = 1
+      and <include refid="materialKeyExpr"/> = #{materialKey}
+      <if test="minConfidence != null">
+        and coalesce(me.confidence, 0) &gt;= #{minConfidence}
+      </if>
+    </where>
+  </sql>
+
+  <select id="countMaterialPapers" resultType="long">
+    select count(*)
+    <include refid="baseJoin"/>
+    <include refid="papersWhere"/>
+  </select>
+
+  <select id="pageMaterialPapers" resultType="com.wong.collector.infrastructure.persistence.dto.MaterialPaperRow">
+    select
+      <include refid="materialKeyExpr"/> as material_key,
+      me.material as material,
+      me.property as property,
+      me.method as method,
+      me.confidence as confidence,
+      cast(me.detail_json as varchar) as detail_json,
+      p.paper_id as paper_id,
+      p.title as title,
+      p.authors as authors,
+      p.year_published as year_published,
+      p.doi as doi,
+      p.status as state,
+      p.citation_count as citation_count,
+      p.update_time as updated_at
+    <include refid="baseJoin"/>
+    <include refid="papersWhere"/>
+    order by p.update_time desc, p.create_time desc, p.paper_id desc, me.id desc
+    limit #{limit} offset #{offset}
+  </select>
+  <!-- 在 MaterialExtractionMapper.xml 中添加 -->
+  <select id="selectGlobalStats" resultType="com.wong.collector.infrastructure.persistence.dto.MaterialGlobalStatsRow">
+    select
+    count(distinct <include refid="materialKeyExpr"/>) as total_materials,
+    count(distinct me.paper_id) as total_papers,
+    count(*) as total_occurrences,
+    coalesce(avg(me.confidence), 0) as avg_confidence
+    from material_extraction me
+    join paper p on p.paper_id = me.paper_id and p.deleted = false
+  </select>
+
+  <select id="selectBatchWithDetailJson"
+          resultType="com.wong.collector.infrastructure.persistence.po.MaterialExtractionPO">
+    SELECT *
+    FROM material_extraction
+    WHERE detail_json IS NOT NULL
+      AND detail_json::text != ''
+          AND detail_json::text != 'null'
+          AND detail_json::text != '{}'
+    ORDER BY id ASC
+      LIMIT #{limit}
+    OFFSET #{offset}
+  </select>
+
+
+</mapper>
+

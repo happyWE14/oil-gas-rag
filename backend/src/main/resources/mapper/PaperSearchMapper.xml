@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wong.collector.infrastructure.persistence.mapper.PaperSearchMapper">
+
+  <sql id="ftsCondition">
+    <if test="tsQuery != null and tsQuery != ''">
+      and paper_fts @@ plainto_tsquery('simple', #{tsQuery})
+    </if>
+    <if test="states != null and states.size() > 0">
+      and status in
+      <foreach item="state" collection="states" open="(" separator="," close=")">
+        #{state}
+      </foreach>
+    </if>
+    <if test="yearMin != null">
+      and year_published &gt;= #{yearMin}
+    </if>
+    <if test="yearMax != null">
+      and year_published &lt;= #{yearMax}
+    </if>
+  </sql>
+
+  <select id="countFtsResults" resultType="long">
+    select count(*)
+    from paper
+    where deleted = false
+    <include refid="ftsCondition"/>
+  </select>
+
+  <select id="searchFts" resultType="com.wong.collector.infrastructure.persistence.dto.PaperSearchRow">
+    select
+      paper_id,
+      title,
+      authors,
+      year_published,
+      paper_source,
+      status,
+      <choose>
+        <when test="tsQuery != null and tsQuery != ''">
+          ts_rank(paper_fts, plainto_tsquery('simple', #{tsQuery})) as score
+        </when>
+        <otherwise>
+          1.0 as score
+        </otherwise>
+      </choose>
+    from paper
+    where deleted = false
+    <include refid="ftsCondition"/>
+    order by
+      <if test="tsQuery != null and tsQuery != ''">
+        score desc,
+      </if>
+      update_time desc, paper_id desc
+    limit #{limit} offset #{offset}
+  </select>
+
+</mapper>

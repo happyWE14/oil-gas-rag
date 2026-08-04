@@ -1,0 +1,26 @@
+# 日志配置
+# 使用 spring.profiles.include=logging 激活
+
+collector:
+  logging:
+    # 是否启用业务日志
+    business-enabled: true
+    # 慢操作阈值（毫秒）
+    slow-operation-threshold: 5000
+
+logging:
+  level:
+    com.wong.collector: DEBUG
+    org.springframework.ai: DEBUG
+    org.dromara.x.file.storage: DEBUG
+    org.springframework.ai.openai: DEBUG
+    org.springframework.web.client.RestTemplate: DEBUG
+
+    root: INFO
+#    com.wong.collector: INFO
+    # 禁用冗余日志
+    com.baomidou.mybatisplus: WARN
+    org.springframework.boot.autoconfigure: WARN
+    com.zaxxer.hikari: WARN
+  pattern:
+    console: "%d{HH:mm:ss} %-5level - %msg%n"

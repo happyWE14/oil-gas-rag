@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wong.collector.infrastructure.persistence.mapper.DocumentChunkMapper">
+  <resultMap id="indexedDocumentMap" type="com.wong.collector.infrastructure.persistence.po.IndexedDocumentPO">
+    <id property="documentId" column="paper_id"/>
+    <result property="title" column="title"/>
+    <result property="state" column="state"/>
+    <result property="embeddingModel" column="embedding_model"/>
+    <result property="chunkCount" column="chunk_count"/>
+  </resultMap>
+
+  <insert id="upsertByPaperAndOrder" parameterType="com.wong.collector.infrastructure.persistence.po.DocumentChunkPO">
+    insert into document_chunk (paper_id, order_no, content, embedding_model, vector)
+    values (#{paperId}, #{orderNo}, #{content}, #{embeddingModel},
+            #{vector,jdbcType=OTHER,typeHandler=com.wong.collector.infrastructure.persistence.typehandler.PgVectorTypeHandler})
+      on conflict (paper_id, order_no) do update
+                                            set content = excluded.content,
+                                            embedding_model = excluded.embedding_model,
+                                            vector = excluded.vector
+  </insert>
+
+  <select id="searchTopKByVector" resultType="com.wong.collector.infrastructure.persistence.po.DocumentChunkPO">
+    select id, paper_id, order_no, content, embedding_model, vector
+    from document_chunk
+    where paper_id = #{paperId}
+      and vector is not null
+    order by vector &lt;=&gt; #{queryVector,jdbcType=OTHER,typeHandler=com.wong.collector.infrastructure.persistence.typehandler.PgVectorTypeHandler}
+      limit #{limit}
+  </select>
+
+  <select id="listIndexedDocuments" resultMap="indexedDocumentMap">
+    select p.paper_id,
+           p.title,
+           p.status as state,
+           min(dc.embedding_model) as embedding_model,
+           count(*) as chunk_count
+    from paper p
+    join document_chunk dc on dc.paper_id = p.paper_id
+    where p.deleted = false
+      and dc.vector is not null
+    group by p.paper_id, p.title, p.status
+    order by lower(p.title), p.paper_id
+  </select>
+
+  <!-- 修复：使用 CAST(#{id} AS bigint) 强制类型转换 -->
+  <select id="selectLiteByIds" resultType="com.wong.collector.infrastructure.persistence.po.DocumentChunkPO">
+    select id, paper_id, order_no, content, embedding_model
+    from document_chunk
+    where id in
+    <foreach collection="ids" item="id" open="(" separator="," close=")">
+      CAST(#{id} AS bigint)
+    </foreach>
+  </select>
+</mapper>
