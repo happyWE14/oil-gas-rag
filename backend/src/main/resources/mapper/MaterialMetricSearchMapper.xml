@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wong.collector.infrastructure.persistence.mapper.MaterialMetricSearchMapper">
+
+  <sql id="metricCondition">
+    <if test="metricKey != null and metricKey != ''">
+      and lower(mm.metric_key) like lower(concat('%', #{metricKey}, '%'))
+    </if>
+    <if test="materialKey != null and materialKey != ''">
+      and lower(mm.material_key) like lower(concat('%', #{materialKey}, '%'))
+    </if>
+    <if test="operator != null and value != null">
+      <choose>
+        <when test="operator == '&gt;'">
+          and mm.value_num &gt; #{value}
+        </when>
+        <when test="operator == '&gt;='">
+          and mm.value_num &gt;= #{value}
+        </when>
+        <when test="operator == '&lt;'">
+          and mm.value_num &lt; #{value}
+        </when>
+        <when test="operator == '&lt;='">
+          and mm.value_num &lt;= #{value}
+        </when>
+        <when test="operator == '='">
+          and mm.value_num = #{value}
+        </when>
+      </choose>
+    </if>
+  </sql>
+
+  <select id="countMetricResults" resultType="long">
+    select count(*)
+    from material_metric mm
+    join paper p on p.paper_id = mm.paper_id and p.deleted = false
+    where mm.value_type in ('number', 'range')
+    <include refid="metricCondition"/>
+  </select>
+
+  <select id="searchMetrics" resultType="com.wong.collector.infrastructure.persistence.dto.MaterialMetricSearchRow">
+    select
+      mm.paper_id,
+      mm.material_key,
+      mm.metric_key,
+      mm.value_type,
+      mm.value_num,
+      mm.value_min,
+      mm.value_max,
+      mm.value_text,
+      mm.unit,
+      mm.confidence
+    from material_metric mm
+    join paper p on p.paper_id = mm.paper_id and p.deleted = false
+    where mm.value_type in ('number', 'range')
+    <include refid="metricCondition"/>
+    order by mm.confidence desc nulls last, mm.id desc
+    limit #{limit} offset #{offset}
+  </select>
+
+</mapper>

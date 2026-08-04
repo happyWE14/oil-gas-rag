@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wong.collector.infrastructure.persistence.mapper.MaterialMetricMapper">
+
+  <delete id="deleteByPaperId">
+    delete from material_metric where paper_id = #{paperId}
+  </delete>
+
+  <!-- 批量插入/更新 -->
+  <insert id="batchInsert" parameterType="java.util.List">
+    insert into material_metric (
+    paper_id, material_key, metric_key, value_type, value_num,
+    value_min, value_max, value_text, unit, qualifier,
+    conditions, confidence, chunk_ids, create_time, update_time
+    ) values
+    <foreach collection="list" item="item" separator=",">
+      (
+      #{item.paperId},
+      #{item.materialKey},
+      #{item.metricKey},
+      #{item.valueType},
+      #{item.valueNum},
+      #{item.valueMin},
+      #{item.valueMax},
+      #{item.valueText},
+      #{item.unit},
+      #{item.qualifier},
+      <!-- ✅ 重要：不要写 typeHandler，让 @TableField 注解生效 -->
+      #{item.conditions},
+      #{item.confidence},
+      #{item.chunkIds, typeHandler=com.wong.collector.infrastructure.persistence.typehandler.StringArrayTypeHandler},
+      now(),
+      now()
+      )
+    </foreach>
+    on conflict (paper_id, material_key, metric_key, md5(conditions::text),
+    coalesce(value_num::text, value_text, ''))
+    do update set
+    value_num = excluded.value_num,
+    value_min = excluded.value_min,
+    value_max = excluded.value_max,
+    value_text = excluded.value_text,
+    unit = excluded.unit,
+    qualifier = excluded.qualifier,
+    confidence = excluded.confidence,
+    chunk_ids = excluded.chunk_ids,
+    update_time = now()
+  </insert>
+
+  <update id="truncateTable">
+    TRUNCATE TABLE material_metric
+  </update>
+</mapper>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wong.collector.infrastructure.persistence.mapper.MaterialObservationMapper">
+
+  <delete id="deleteByPaperId">
+    delete from material_observation where paper_id = #{paperId}
+  </delete>
+
+  <insert id="batchInsert" parameterType="java.util.List">
+    insert into material_observation (
+      paper_id, material_key, type, content, confidence, chunk_ids, create_time
+    ) values
+    <foreach collection="list" item="item" separator=",">
+      (
+        #{item.paperId}, #{item.materialKey}, #{item.type}, #{item.content},
+        #{item.confidence}, #{item.chunkIds,jdbcType=ARRAY,typeHandler=com.wong.collector.infrastructure.persistence.typehandler.StringArrayTypeHandler}, now()
+      )
+    </foreach>
+    on conflict (paper_id, material_key, type, md5(content))
+    do nothing
+  </insert>
+  <!-- 清空表（用于存量迁移） -->
+  <update id="truncateTable">
+    TRUNCATE TABLE material_observation
+  </update>
+
+<!--  <select id="findByPaperAndMaterial" resultType="com.wong.collector.infrastructure.persistence.po.MaterialObservationPO">-->
+<!--    SELECT * FROM material_observation-->
+<!--    WHERE paper_id = #{paperId} AND material_key = #{materialKey}-->
+<!--  </select>-->
+</mapper>

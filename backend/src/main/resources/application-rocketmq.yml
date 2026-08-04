@@ -1,0 +1,32 @@
+# RocketMQ配置
+rocketmq:
+  # NameServer地址
+  name-server: 127.0.0.1:9876
+
+  # 生产者配置
+  producer:
+    # 生产者组名
+    group: paper-collector-producer-group
+    # 发送消息超时时间（毫秒）
+    send-message-timeout: 30000
+    # 压缩消息体阈值（字节）
+    compress-message-body-threshold: 4096
+    # 同步发送失败重试次数
+    retry-times-when-send-failed: 2
+    # 异步发送失败重试次数
+    retry-times-when-send-async-failed: 2
+    # 消息最大长度（字节）
+    max-message-size: 4194304
+
+  # 消费者配置
+  consumer:
+    # 消费模式：CLUSTERING-集群模式，BROADCASTING-广播模式
+    message-model: CLUSTERING
+    # 拉取消息的批次大小
+    pull-batch-size: 32
+
+# 日志配置
+logging:
+  level:
+    org.apache.rocketmq: INFO
+    com.wong.collector.message: DEBUG
