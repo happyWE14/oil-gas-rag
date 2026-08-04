@@ -6,6 +6,18 @@ An end-to-end literature analysis system that discovers academic papers, convert
 
 This repository is intentionally presented as an **LLM application backend and deterministic document workflow**, not as a production-ready autonomous agent. Every capability below is labeled according to the code that is currently present.
 
+## Project snapshot
+
+- **Backend:** Java 17, Spring Boot, PostgreSQL/pgvector, Redis, and Elasticsearch.
+- **RAG:** Markdown-aware chunking, 2048-dimensional embeddings, paper-scoped Top-K retrieval, and two-stage structured extraction with evidence chunks.
+- **Workflow:** a 15-state paper lifecycle with bounded concurrency, retry, stale-task recovery, and an optional Outbox/RocketMQ path.
+- **Verified run:** the local custom RAG interface listed 92 vectorized papers and completed an evidence-grounded DeepSeek query using DashScope embeddings; the corpus and vectors are not included.
+- **Checks:** 8 offline backend tests passed, 13 environment-gated integration tests were skipped, and the frontend type check and production build passed.
+
+## Personal contribution and AI assistance
+
+I was responsible for the backend system and the Elasticsearch integration, including implementation, integration, and verification. AI-assisted development tools were used for code suggestions, refactoring, debugging, and documentation support. Elasticsearch text and structured-material search are implemented; vector population and hybrid score fusion remain partial and are not claimed as completed work.
+
 ## What problem does it solve?
 
 Domain experts often need to read many papers and extract repeated facts such as material names, experimental conditions, measured properties, and supporting passages. This project turns that manual process into a traceable pipeline:
