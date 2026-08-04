@@ -2,23 +2,35 @@
 
 [中文说明](README.zh-CN.md)
 
-An end-to-end literature analysis system that discovers academic papers, converts them into searchable evidence, and uses retrieval-augmented LLM extraction to build structured material knowledge.
+An evidence-grounded RAG system for collecting and analysing oil-and-gas research papers. It turns academic PDFs into searchable chunks, structured material records, experimental metrics, and answers linked back to the source evidence.
 
-This repository is intentionally presented as an **LLM application backend and deterministic document workflow**, not as a production-ready autonomous agent. Every capability below is labeled according to the code that is currently present.
+The project is implemented as a **Java LLM-application backend with a deterministic document workflow**, rather than an autonomous agent. It combines PostgreSQL/pgvector retrieval, Elasticsearch material search, Redis coordination and caching, external paper sources, PDF-to-Markdown conversion, and LLM-based extraction behind a Vue interface.
 
-## Project snapshot
+## Project at a glance
 
-- **Backend:** Java 17, Spring Boot, PostgreSQL/pgvector, Redis, and Elasticsearch.
-- **RAG:** Markdown-aware chunking, 2048-dimensional embeddings, paper-scoped Top-K retrieval, and two-stage structured extraction with evidence chunks.
-- **Workflow:** a 15-state paper lifecycle with bounded concurrency, retry, stale-task recovery, and an optional Outbox/RocketMQ path.
-- **Verified run:** the local custom RAG interface listed 92 vectorized papers and completed an evidence-grounded DeepSeek query using DashScope embeddings; the corpus and vectors are not included.
-- **Checks:** 8 offline backend tests passed, 13 environment-gated integration tests were skipped, and the frontend type check and production build passed.
+| Question | Answer |
+|---|---|
+| What goes in? | Search queries, academic metadata, and authorized PDF/Markdown documents from arXiv, CORE, Semantic Scholar, or local storage |
+| What does the system do? | Relevance screening → download → document conversion → Markdown-aware chunking → embedding → paper-scoped retrieval → two-stage material and property extraction |
+| What comes out? | A searchable paper library, material entities, structured metrics and experimental conditions, source-paper links, retained evidence passages, and optional document-grounded answers |
+| What was added in the subsequent engineering work? | Reproducible local configuration, Elasticsearch material indexing/search/synchronization, translation and caching, paper-search runtime adaptations, extraction-result synchronization, failure-handling improvements, local-file access, frontend integration, and end-to-end verification |
+| What has been run locally? | 92 vectorized papers were listed in the custom RAG interface; a DeepSeek answer was generated from DashScope-embedded evidence; 8 offline backend tests, the frontend type check, and the production build passed |
 
-## Personal contribution and AI assistance
+The corpus, paper files, database contents, and vectors used for the local run are not distributed in this repository.
 
-I was responsible for the backend system and the Elasticsearch integration, including implementation, integration, and verification. AI-assisted development tools were used for code suggestions, refactoring, debugging, and documentation support. Elasticsearch text and structured-material search are implemented; vector population and hybrid score fusion remain partial and are not claimed as completed work.
+## Project provenance and contribution boundary
 
-## What problem does it solve?
+This project continues from an existing backend prototype, system architecture, database design, and initial paper-processing workflow provided by a senior graduate student. The public repository was created as a sanitized snapshot, so its import commits should not be interpreted as evidence that one person authored the entire codebase.
+
+| Scope | Contribution boundary |
+|---|---|
+| Inherited foundation | Overall architecture, database design, initial Spring Boot backend, and the original paper lifecycle and task-orchestration design |
+| Subsequent engineering work | Made the inherited system reproducibly runnable; integrated Elasticsearch material indexing, structured search, synchronization, and related APIs; added translation and caching; adapted paper-search execution and external model/OCR configuration; extended result synchronization, failure handling, workflow runtime behavior, and local-file access; integrated and verified PostgreSQL/pgvector, Redis, Elasticsearch, and model services |
+| AI-assisted implementation | Generative-AI tools were used extensively for the frontend and for portions of code, refactoring, debugging, and documentation. Requirements, code review, integration, runtime debugging, and acceptance verification remained the current maintainer's responsibility |
+
+The original architecture, database design, backend baseline, and initial state-machine design are not claimed as subsequent personal work. Elasticsearch text and structured-material search are implemented; vector population and hybrid score fusion remain partial and are not claimed as completed capabilities.
+
+## How the system works
 
 Domain experts often need to read many papers and extract repeated facts such as material names, experimental conditions, measured properties, and supporting passages. This project turns that manual process into a traceable pipeline:
 
@@ -26,14 +38,16 @@ Domain experts often need to read many papers and extract repeated facts such as
 2. Pre-screen title and abstract relevance with an LLM.
 3. Download and transform PDFs into Markdown.
 4. Split the document with Markdown-aware rules.
-5. create embeddings and store chunks in PostgreSQL/pgvector.
+5. Create embeddings and store chunks in PostgreSQL/pgvector.
 6. Retrieve evidence inside each paper.
 7. Run two-stage material identification and property extraction.
 8. Persist structured observations and expose text, metric, and research interfaces.
 
-The main value is not “calling an LLM.” It is placing a probabilistic model inside a stateful, retryable, evidence-aware backend.
+The result is a stateful, retryable, evidence-aware backend around probabilistic model calls: processing failures remain visible, extraction results retain their supporting chunks, and deterministic workflow rules control when each model operation runs.
 
 ## Running evidence and reuse boundary
+
+The screenshots below are taken from the running system. Together they show the operational dashboard, multi-source search configuration, per-paper processing states, the searchable paper and material libraries, structured metrics, observations, retained evidence passages, and links back to source papers. The reusable custom-document RAG run is shown later with its retrieved evidence and generated answer.
 
 ### Petroleum literature mode: implemented UI
 
