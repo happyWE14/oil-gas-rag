@@ -37,7 +37,7 @@ public class DocumentChunkSplitter {
 
         int chunkSize = Math.max(50, properties.getChunking().getChunkSize());
         int configuredOverlap = Math.max(0, properties.getChunking().getChunkOverlap());
-        // overlap 必须小于 chunkSize，默认 400/80 即 20% overlap。
+        // overlap 必须显著小于 chunkSize；默认 400/80 即 20% overlap。
         int overlap = Math.min(configuredOverlap, Math.max(0, chunkSize / 2));
 
         Map<String, Object> metadata = Map.of(
@@ -63,9 +63,8 @@ public class DocumentChunkSplitter {
     /**
      * 普通正文：按 token 预算做滑动窗口切分。
      *
-     * 例如 chunkSize=400、overlap=80：
-     * chunk1 覆盖约 0~400 token；chunk2 从 chunk1 尾部约 80 token 处继续，
-     * 相邻 chunk 保留上下文，避免材料名/实验条件/指标值正好落在边界两侧。
+     * 例如 chunkSize=400、overlap=80：相邻 chunk 保留约 80 token 上下文，
+     * 避免材料名、实验条件和指标值恰好落在两个 chunk 的边界两侧。
      */
     private List<Document> splitTextBlock(
         String block,
@@ -86,7 +85,7 @@ public class DocumentChunkSplitter {
                 end = nextCodePointIndex(block, start);
             }
 
-            // 尽量在句号/换行等自然边界收尾，但不为了语义边界把 chunk 缩得太小。
+            // 尽量在句号、分号、换行等自然边界收尾，但不为了边界把 chunk 缩得太小。
             if (end < block.length()) {
                 int preferredEnd = findPreferredBoundary(block, start, end);
                 if (preferredEnd > start) {
@@ -117,10 +116,10 @@ public class DocumentChunkSplitter {
     }
 
     /**
-     * 表格采用单独策略：400 token 是正文目标大小，不作为“必须砍断表格”的硬限制。
+     * 表格采用单独策略：400 token 是正文的目标 chunk 大小，不是“必须砍断表格”的硬限制。
      *
      * 1. 中小表格：最多允许到 chunkSize * 2（默认 800 token），整体保留；
-     * 2. 超大表格：按完整行拆分，并在每个子表中重复表头和分隔行；
+     * 2. 超大表格：按完整数据行拆分，并在每个子表中重复表头和分隔行；
      * 3. 单行本身超限时仍优先完整保留该行，避免把一条材料-条件-指标记录截成两半。
      */
     private List<Document> splitTableBlock(
@@ -142,10 +141,12 @@ public class DocumentChunkSplitter {
             .toList();
 
         if (lines.size() < 3 || !isTableSeparator(lines.get(1))) {
-            // 不是标准 Markdown 表格时不要冒险按“行表格”处理，退回正文切分。
-            return splitTextBlock(block, metadata, chunkSize, Math.min(
-                properties.getChunking().getChunkOverlap(), Math.max(0, chunkSize / 2)
-            ));
+            // 不是标准 Markdown 表格时不要冒险按表格行处理，退回普通正文切分。
+            int fallbackOverlap = Math.min(
+                Math.max(0, properties.getChunking().getChunkOverlap()),
+                Math.max(0, chunkSize / 2)
+            );
+            return splitTextBlock(block, metadata, chunkSize, fallbackOverlap);
         }
 
         String header = lines.get(0);
@@ -165,7 +166,7 @@ public class DocumentChunkSplitter {
                 dataRowsInCurrent = 0;
             }
 
-            // 即使单行很长，也完整保留；下一轮会从新子表开始。
+            // 即使单行很长，也完整保留；下一轮会从新的子表开始。
             current.append("\n").append(row);
             dataRowsInCurrent++;
         }
@@ -179,15 +180,16 @@ public class DocumentChunkSplitter {
 
     /**
      * 在字符区间 [start, text.length] 上二分，找到 token 数不超过预算的最大 end。
-     * 使用字符索引而不是直接切 token id，可避免 Unicode 字符被拆坏。
+     * 使用字符索引而不是直接切 token id，可以避免最终 chunk 把 Unicode 字符拆坏。
      */
     private int findMaxEndWithinTokenBudget(String text, int start, int tokenBudget) {
         int low = start + 1;
         int high = text.length();
-        int best = low;
+        int best = nextCodePointIndex(text, start);
 
         while (low <= high) {
-            int mid = safeCodePointBoundary(text, low + (high - low) / 2);
+            int rawMid = low + (high - low) / 2;
+            int mid = safeCodePointBoundary(text, rawMid);
             if (mid <= start) {
                 mid = nextCodePointIndex(text, start);
             }
@@ -195,9 +197,10 @@ public class DocumentChunkSplitter {
             int tokens = countTokens(text.substring(start, mid));
             if (tokens <= tokenBudget) {
                 best = mid;
-                low = mid + 1;
+                // 按 rawMid 推进，保证遇到 surrogate pair 时二分仍一定前进。
+                low = rawMid + 1;
             } else {
-                high = mid - 1;
+                high = rawMid - 1;
             }
         }
         return safeCodePointBoundary(text, best);
@@ -217,13 +220,18 @@ public class DocumentChunkSplitter {
 
         // 找“最靠前、但后缀 token 数仍 <= overlapTokens”的位置。
         while (low <= high) {
-            int mid = safeCodePointBoundary(text, low + (high - low) / 2);
+            int rawMid = low + (high - low) / 2;
+            int mid = safeCodePointBoundary(text, rawMid);
+            if (mid < chunkStart) {
+                mid = chunkStart;
+            }
+
             int tokens = countTokens(text.substring(mid, chunkEnd));
             if (tokens <= overlapTokens) {
                 best = mid;
-                high = mid - 1;
+                high = rawMid - 1;
             } else {
-                low = mid + 1;
+                low = rawMid + 1;
             }
         }
 
@@ -253,8 +261,11 @@ public class DocumentChunkSplitter {
         int i = safeCodePointBoundary(text, index);
         while (i < upperBound) {
             char c = text.charAt(i);
-            if (Character.isWhitespace(c) || isPunctuation(c)) {
+            if (Character.isWhitespace(c)) {
                 return skipLeadingWhitespace(text, i);
+            }
+            if (isPunctuation(c)) {
+                return skipLeadingWhitespace(text, nextCodePointIndex(text, i));
             }
             i = nextCodePointIndex(text, i);
         }
@@ -274,6 +285,9 @@ public class DocumentChunkSplitter {
         return i;
     }
 
+    /**
+     * 如果 index 正好落在 UTF-16 surrogate pair 中间，就回退到完整 code point 的边界。
+     */
     private int safeCodePointBoundary(String text, int index) {
         int i = Math.max(0, Math.min(index, text.length()));
         if (i > 0 && i < text.length()
